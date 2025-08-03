@@ -1,5 +1,5 @@
 // Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSMain
+#pragma kernel March
 #pragma target 5.0
 
 static const int3 cornerOffsets[8] =
@@ -297,8 +297,6 @@ struct Triangle
     float3 c;
 };
 
-RWStructuredBuffer<int> triangleTableBuffer;
-
 AppendStructuredBuffer<Triangle> triangleBuffer;
 float radius;
 int resolution;
@@ -306,8 +304,8 @@ int resolution;
 float SphereField(float3 position, float radius, int resolution);
 float3 VertexLerp(float3 p1, float3 p2, float v1, float v2);
 
-[numthreads(8,8,8)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+[numthreads(8,8,16)]
+void March (uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= resolution - 1 || id.y >= resolution - 1 || id.z >= resolution - 1) return;
     

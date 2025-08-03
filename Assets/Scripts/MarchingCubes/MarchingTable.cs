@@ -2,11 +2,11 @@ using UnityEngine;
 
 public static class MarchingTable
 {
+    /*
 	private static ComputeBuffer cornerTableBuffer;
 	private static ComputeBuffer edgeTableBuffer;
 	private static ComputeBuffer triangleTableBuffer;
 
-	/*
 	public static ComputeBuffer CornerTableBuffer
 	{
 		get
@@ -51,7 +51,7 @@ public static class MarchingTable
 		}
 	}*/
 
-	public struct Edge
+    public struct Edge
 	{
 		public Edge(Vector3 s, Vector3 e)
 		{

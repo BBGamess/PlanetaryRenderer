@@ -68,7 +68,7 @@ public class MarchingCubes : MonoBehaviour
         MarchCubesGPU();
 
         if (meshCollider != null) meshCollider.sharedMesh = meshFilter.sharedMesh;
-        Vector3 newPosition = new Vector3(resolution, resolution, resolution) * -0.5f;
+        Vector3 newPosition = new Vector3(-resolution, -resolution, -resolution) * 0.5f;
         transform.localPosition = newPosition;
     }
 
@@ -165,14 +165,14 @@ public class MarchingCubes : MonoBehaviour
         CreateBuffers();
         triangleBuffer.SetCounterValue(0);
 
-        int threadGroups = Mathf.CeilToInt(resolution / 8.0f);
-        int kernelID = marchingCubesShader.FindKernel("CSMain");
+        int threadGroups = Mathf.CeilToInt(_resolution2x / 8.0f);
+        int kernelID = marchingCubesShader.FindKernel("March");
 
         marchingCubesShader.SetInt("resolution", resolution);
         marchingCubesShader.SetFloat("radius", radius);
         marchingCubesShader.SetBuffer(kernelID, "triangleBuffer", triangleBuffer);
 
-        marchingCubesShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups);
+        marchingCubesShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups/2);
 
         ComputeBuffer.CopyCount(triangleBuffer, triangleCountBuffer, 0);
         int[] triCountArr = { 0 };
