@@ -17,6 +17,6 @@ public class PlanetRendererInspector : Editor
         PlanetRenderer pr = activeObject.GetComponent<PlanetRenderer>();
         if (pr == null) return;
 
-        if (generate) pr.UpdateChunks();
+        if (generate) pr.RenderPlanet();
     }
 }

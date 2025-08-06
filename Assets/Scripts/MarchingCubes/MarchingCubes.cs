@@ -14,12 +14,10 @@ public class MarchingCubes : MonoBehaviour
     private List<Vector3> _vertices = new List<Vector3>();
     private List<int> _triangles = new List<int>();
 
-    private ComputeBuffer vertexBuffer;
     private ComputeBuffer triangleBuffer;
     private ComputeBuffer triangleCountBuffer;
 
     private int _resolution2x;
-    private float[,,] heights;
 
     private MeshFilter meshFilter;
     private MeshCollider meshCollider;
@@ -28,21 +26,17 @@ public class MarchingCubes : MonoBehaviour
     {
         public Vector3 a; public Vector3 b; public Vector3 c;
 
-        public Vector3 this[int index]
+        public readonly Vector3 this[int index]
         {
             get
             {
-                switch (index)
+                return index switch
                 {
-                    case 0:
-                        return a;
-                    case 1:
-                        return b;
-                    case 2:
-                        return c;
-                    default:
-                        return Vector3.zero;
-                }
+                    0 => a,
+                    1 => b,
+                    2 => c,
+                    _ => Vector3.zero,
+                };
             }
         }
     }
@@ -56,8 +50,6 @@ public class MarchingCubes : MonoBehaviour
         SetMesh();
 
         if (meshCollider != null) meshCollider.sharedMesh = meshFilter.sharedMesh;
-        Vector3 newPosition = new Vector3(-resolution, -resolution, -resolution);
-        transform.localPosition = newPosition;
     }
 
     public void GenerateGPU()
@@ -68,8 +60,6 @@ public class MarchingCubes : MonoBehaviour
         MarchCubesGPU();
 
         if (meshCollider != null) meshCollider.sharedMesh = meshFilter.sharedMesh;
-        Vector3 newPosition = new Vector3(-resolution, -resolution, -resolution) * 0.5f;
-        transform.localPosition = newPosition;
     }
 
     private void SetMesh()
@@ -119,8 +109,8 @@ public class MarchingCubes : MonoBehaviour
 
     private float ScalarField(float x, float y, float z)
     {
-        x = x - _resolution2x / 2; y = y - _resolution2x / 2; z = z - _resolution2x / 2;
-        return radius*radius - (x * x + y * y + z * z);
+        Vector3 vec = new Vector3(x, y, z) + transform.position;
+        return radius*radius - vec.sqrMagnitude;
     }
 
     private void MarchCubes()
@@ -168,11 +158,15 @@ public class MarchingCubes : MonoBehaviour
         int threadGroups = Mathf.CeilToInt(_resolution2x / 8.0f);
         int kernelID = marchingCubesShader.FindKernel("March");
 
+        ComputeBuffer offBuffer = new ComputeBuffer(1, sizeof(float) * 3, ComputeBufferType.Raw);
+        offBuffer.SetData(new Vector3[] { transform.position });
+
         marchingCubesShader.SetInt("resolution", resolution);
         marchingCubesShader.SetFloat("radius", radius);
+        marchingCubesShader.SetBuffer(kernelID, "off", offBuffer);
         marchingCubesShader.SetBuffer(kernelID, "triangleBuffer", triangleBuffer);
 
-        marchingCubesShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups/2);
+        marchingCubesShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups);
 
         ComputeBuffer.CopyCount(triangleBuffer, triangleCountBuffer, 0);
         int[] triCountArr = { 0 };
@@ -196,6 +190,7 @@ public class MarchingCubes : MonoBehaviour
 
         triangleBuffer.Release();
         triangleCountBuffer.Release();
+        offBuffer.Release();
     }
 
     private void MarchCube(Vector3 position, float[] cubeCornerHeights)

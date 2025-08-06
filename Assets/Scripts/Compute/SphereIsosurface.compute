@@ -1,0 +1,34 @@
+#pragma kernel SphereIsosurface
+#include "Includes/ComputeUtils.hlsl"
+
+RWStructuredBuffer<float4> points;
+StructuredBuffer<float3> chunkOffset;
+
+float radius;
+float resolution;
+
+float SphereField(float3 pos)
+{
+    float3 worldPos = pos;
+    return radius * radius - (worldPos.x * worldPos.x + worldPos.y * worldPos.y + worldPos.z * worldPos.z);
+}
+
+int Index(int x, int y, int z)
+{
+    int pointResolution = resolution + 1;
+    return x + pointResolution * y + pointResolution * pointResolution * z;
+}
+
+[numthreads(8,8,8)]
+void SphereIsosurface (uint3 id : SV_DispatchThreadID)
+{
+    // We run untill id is exactly equal to resolution
+    // Because there are (resolution + 1) points on each axes
+    if (id.x >= resolution || id.y >= resolution || id.z >= resolution) return;
+    
+    float3 pos = id.xyz + chunkOffset[0];
+    float value = SphereField(pos);
+    float4 p = float4(id.xyz, value);
+    
+    points[Index(id.x, id.y, id.z)] = p;
+}
