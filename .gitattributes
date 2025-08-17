@@ -1,0 +1,7 @@
+*.shader linguist-language=HLSL
+*.compute linguist-language=HLSL
+*.hlsl linguist-language=HLSL
+*.cginc linguist-language=HLSL
+*.meta linguist-language=YAML
+*.unity linguist-language=YAML
+*.prefab linguist-language=YAML
