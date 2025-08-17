@@ -10,3 +10,9 @@ float3 VertexLerp(float3 p1, float3 p2, float v1, float v2)
     float t = (0.0 - v1) / (v2 - v1 + 1e-6);
     return lerp(p1, p2, t);
 }
+
+int Index(float3 id, int resolution)
+{
+    int pointResolution = resolution + 1;
+    return (int) id.x + pointResolution * ((int) id.y + pointResolution * (int) id.z);
+}

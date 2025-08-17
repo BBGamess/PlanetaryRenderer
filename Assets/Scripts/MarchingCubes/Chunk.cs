@@ -9,15 +9,27 @@ public class Chunk : MonoBehaviour
     private Mesh m_Mesh;
     private Material m_Material;
 
-    private ComputeBuffer m_TriangleBuffer;
-    private ComputeBuffer m_TriangleCountBuffer;
-    private ComputeBuffer m_PointsBuffer;
-    private ComputeBuffer m_ChunkOffsetBuffer;
+    private Vector2 m_MinMax;
 
     private bool m_BuffersReleased = true;
     private bool m_ChunkInitialized = false;
 
-    struct Triangle
+    public float Max
+    {
+        get { return m_MinMax[1]; }
+    }
+
+    public float Min
+    {
+        get { return m_MinMax[0]; }
+    }
+    
+    public bool Initialized
+    {
+        get { return m_ChunkInitialized; }
+    }
+
+    public struct Triangle
     {
         public Vector3 a, b, c;
 
@@ -43,131 +55,95 @@ public class Chunk : MonoBehaviour
         m_Renderer = GetComponent<MeshRenderer>();
         m_Renderer.sharedMaterial = m_Material;
 
+        if (m_Mesh == null)
+        {
+            m_Mesh = new Mesh { indexFormat = UnityEngine.Rendering.IndexFormat.UInt32 };
+            m_Mesh.MarkDynamic();
+            m_MeshFilter.sharedMesh = m_Mesh;
+        }
+
         m_ChunkInitialized = true;
     }
 
-    private void CreateBuffers(int maxTriangleCount, int numPoints)
+    public void ComputeNoise(ComputeShader noiseShader, ComputeBuffer noiseBuffer, ComputeBuffer noiseLayersBuffer, Vector3 center, float radius,
+        int resolution, int spacing, int numLayers)
     {
-        if (!m_BuffersReleased) ReleaseBuffers();
+        int threadGroups = Mathf.CeilToInt((resolution+1) / 8.0f);
+        int kernelID = noiseShader.FindKernel("FractalNoise");
 
-        m_TriangleBuffer = new ComputeBuffer(maxTriangleCount, sizeof(float) * 3 * 3, ComputeBufferType.Append);
-        m_TriangleCountBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.Raw);
+        noiseShader.SetBuffer(kernelID, "noise", noiseBuffer);
+        noiseShader.SetBuffer(kernelID, "noiseLayers", noiseLayersBuffer);
 
-        m_PointsBuffer = new ComputeBuffer(numPoints, sizeof(float) * 4, ComputeBufferType.Raw);
-        m_ChunkOffsetBuffer = new ComputeBuffer(1, sizeof(float) * 3, ComputeBufferType.Raw);
-        m_ChunkOffsetBuffer.SetData(new Vector3[] { transform.localPosition });
+        noiseShader.SetVector("chunkOffset", transform.localPosition);
+        noiseShader.SetVector("center", center);
+        noiseShader.SetFloat("radius", radius);
+        noiseShader.SetInt("resolution", resolution);
+        noiseShader.SetInt("spacing", spacing);
+        noiseShader.SetInt("numLayers", numLayers);
 
-        m_BuffersReleased = false;
+        noiseShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups);
     }
 
-    private void ReleaseBuffers()
-    {
-        if (m_BuffersReleased) return;
-
-        m_TriangleBuffer.Release();
-        m_TriangleCountBuffer.Release();
-        m_PointsBuffer.Release();
-        m_ChunkOffsetBuffer.Release();
-
-        m_TriangleBuffer = null;
-        m_TriangleCountBuffer = null;
-        m_PointsBuffer = null;
-        m_ChunkOffsetBuffer = null;
-
-        m_BuffersReleased = true;
-    }
-
-    private void ComputeChunk(ComputeShader isosurfaceShader, Vector3 center, float radius, int resolution)
+    public void ComputeElevation(ComputeShader isosurfaceShader, ComputeBuffer pointsBuffer, ComputeBuffer noiseBuffer,
+        Vector3 center, float radius, int resolution, int spacing)
     {
         int threadGroups = Mathf.CeilToInt((resolution+1) / 8.0f);
         int kernelID = isosurfaceShader.FindKernel("SphereIsosurface");
 
-        isosurfaceShader.SetBuffer(kernelID, "chunkOffset", m_ChunkOffsetBuffer);
-        isosurfaceShader.SetBuffer(kernelID, "points", m_PointsBuffer);
+        Vector2[] minMaxArray = { new Vector2(float.MaxValue, float.MinValue) };
+        ComputeBuffer minMaxBuffer = new ComputeBuffer(1, sizeof(float) * 2, ComputeBufferType.Default);
+        minMaxBuffer.SetData(minMaxArray);
+
+        isosurfaceShader.SetBuffer(kernelID, "minMax", minMaxBuffer);
+        isosurfaceShader.SetBuffer(kernelID, "points", pointsBuffer);
+        isosurfaceShader.SetBuffer(kernelID, "noise", noiseBuffer);
+
+        isosurfaceShader.SetVector("chunkOffset", transform.localPosition);
         isosurfaceShader.SetVector("center", center);
         isosurfaceShader.SetFloat("radius", radius);
         isosurfaceShader.SetInt("resolution", resolution);
+        isosurfaceShader.SetInt("spacing", spacing);
 
         isosurfaceShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups);
+        
+        minMaxBuffer.GetData(minMaxArray);
+        m_MinMax = minMaxArray[0];
+        
+        minMaxBuffer.Release();
     }
 
-    public void UpdateChunkPipeline(
-        ComputeShader marchingShader, ComputeShader isosurfaceShader, Vector3 surfaceCenter, 
-        float radius, int resolution, int maxTriangleCount, int numPoints)
+    public void MarchChunk(
+        ComputeShader marchingShader, ComputeBuffer triangleBuffer, ComputeBuffer triangleCountBuffer, ComputeBuffer pointsBuffer, int resolution)
     {
         if (!m_ChunkInitialized) return;
 
-        CreateBuffers(maxTriangleCount, numPoints);
-        m_TriangleBuffer.SetCounterValue(0);
-
-        ComputeChunk(isosurfaceShader, surfaceCenter, radius, resolution);
-
+        triangleBuffer.SetCounterValue(0);
 
         int threadGroups = Mathf.CeilToInt(resolution / 8.0f);
         int kernelID = marchingShader.FindKernel("MarchChunk");
 
-        marchingShader.SetBuffer(kernelID, "triangleBuffer", m_TriangleBuffer);
-        marchingShader.SetBuffer(kernelID, "points", m_PointsBuffer);
-        marchingShader.SetBuffer(kernelID, "chunkOffset", m_ChunkOffsetBuffer);
+        marchingShader.SetBuffer(kernelID, "triangleBuffer", triangleBuffer);
+        marchingShader.SetBuffer(kernelID, "points", pointsBuffer);
+
         marchingShader.SetInt("resolution", resolution);
         marchingShader.SetFloat("isovalue", 0.0f);
 
         marchingShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups);
 
-        ComputeBuffer.CopyCount(m_TriangleBuffer, m_TriangleCountBuffer, 0);
+        ComputeBuffer.CopyCount(triangleBuffer, triangleCountBuffer, 0);
         int[] triCountArr = { 0 };
-        m_TriangleCountBuffer.GetData(triCountArr);
+        triangleCountBuffer.GetData(triCountArr);
         int numTriangles = triCountArr[0];
 
         Triangle[] triangles = new Triangle[numTriangles];
-        m_TriangleBuffer.GetData(triangles, 0, 0, numTriangles);
+        triangleBuffer.GetData(triangles, 0, 0, numTriangles);
 
         SetMesh(triangles);
-
-        ReleaseBuffers();
-    }
-
-    public void UpdateChunk(ComputeShader marchingShader, Vector3 center, float radius, int resolution, int maxTriangleCount, int numPoints)
-    {
-        if (!m_ChunkInitialized) return;
-
-        CreateBuffers(maxTriangleCount, numPoints);
-        m_TriangleBuffer.SetCounterValue(0);
-
-        int threadGroups = Mathf.CeilToInt(resolution / 8.0f);
-        int kernelID = marchingShader.FindKernel("March");
-
-        ComputeBuffer offBuffer = new ComputeBuffer(1, sizeof(float) * 3, ComputeBufferType.Raw);
-        offBuffer.SetData(new Vector3[] { transform.localPosition });
-
-        marchingShader.SetInt("resolution", resolution);
-        marchingShader.SetFloat("radius", radius);
-        marchingShader.SetBuffer(kernelID, "off", offBuffer);
-        marchingShader.SetBuffer(kernelID, "triangleBuffer", m_TriangleBuffer);
-
-        marchingShader.Dispatch(kernelID, threadGroups, threadGroups, threadGroups);
-
-        ComputeBuffer.CopyCount(m_TriangleBuffer, m_TriangleCountBuffer, 0);
-        int[] triCountArr = { 0 };
-        m_TriangleCountBuffer.GetData(triCountArr);
-        int numTriangles = triCountArr[0];
-
-        Triangle[] triangles = new Triangle[numTriangles];
-        m_TriangleBuffer.GetData(triangles, 0, 0, numTriangles);
-
-        SetMesh(triangles);
-
-        ReleaseBuffers();
-        offBuffer.Release();
     }
 
     private void SetMesh(Triangle[] triangles)
     {
-        if (m_Mesh != null) m_Mesh.Clear();
-        m_Mesh = new Mesh()
-        {
-            indexFormat = UnityEngine.Rendering.IndexFormat.UInt32
-        };
+        m_Mesh.Clear();
         int numTriangles = triangles.Length;
 
         Vector3[] meshVertices = new Vector3[numTriangles * 3];
@@ -180,26 +156,12 @@ public class Chunk : MonoBehaviour
                 meshVertices[i * 3 + j] = triangles[i][j];
             }
 
-        m_Mesh.Clear();
-
-        m_Mesh.vertices = meshVertices;
-        m_Mesh.triangles = meshTriangles;
+        m_Mesh.SetVertices(meshVertices);
+        m_Mesh.SetTriangles(meshTriangles, 0);
 
         m_Mesh.RecalculateBounds();
         m_Mesh.RecalculateNormals();
-        m_Mesh.RecalculateTangents();
 
         m_MeshFilter.mesh = m_Mesh;
     }
-
-    /*private void OnDrawGizmos()
-    {
-        Gizmos.color = Color.red;
-        Vector3 corner = transform.position;
-        Gizmos.DrawSphere(corner, 1.0f);
-
-        Gizmos.color = Color.gray;
-        Vector3 vec = new Vector3(20.0f, 20.0f, 20.0f);
-        Gizmos.DrawWireCube(corner + vec, Vector3.one * 41);
-    }*/
 }

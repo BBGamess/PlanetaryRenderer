@@ -18,12 +18,6 @@ RWStructuredBuffer<float3> chunkOffset;
 int resolution;
 float isovalue;
 
-int Index(int x, int y, int z)
-{
-    int pointResolution = resolution + 1;
-    return x + pointResolution * (y + pointResolution * z);
-}
-
 [numthreads(8,8,8)]
 void MarchChunk (uint3 id : SV_DispatchThreadID)
 {
@@ -33,8 +27,8 @@ void MarchChunk (uint3 id : SV_DispatchThreadID)
     
     for (int i = 0; i < 8; i++)
     {
-        float3 pos = id.xyz + cornerOffsets[i];
-        cornerPoints[i] = points[Index(pos.x, pos.y, pos.z)];
+        float3 indexPos = id.xyz + cornerOffsets[i];
+        cornerPoints[i] = points[Index(indexPos.xyz, resolution)];
     }
     
     int config = 0;
