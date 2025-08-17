@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 654d80c5fe1bce1499e3a92b5b775d3e
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - mat: {instanceID: 0}
+  - marchingShader: {fileID: 7200000, guid: 1f427e74c05542642aa7b5956dfa1044, type: 3}
+  - isosurfaceShader: {fileID: 7200000, guid: 041005834db592f479ba935e861f0da7, type: 3}
+  - noiseShader: {fileID: 7200000, guid: d1e13c7987a293341b3eb82fe42c9e6b, type: 3}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

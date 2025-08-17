@@ -1,0 +1,61 @@
+#pragma kernel SphereIsosurface
+
+#include "Includes/ComputeUtils.hlsl"
+
+RWStructuredBuffer<float4> points;
+RWStructuredBuffer<float2> minMax;
+RWStructuredBuffer<float> noise;
+
+float3 chunkOffset;
+float3 center;
+float radius;
+int resolution;
+int spacing;
+
+void AddElevation(float elevation)
+{
+    if (elevation < minMax[0][0])
+    {
+        minMax[0][0] = elevation;
+
+    }
+    else if (elevation > minMax[0][1])
+    {
+        minMax[0][1] = elevation;
+    }
+}
+
+float SphereField(float3 pos, float terrain)
+{
+    float3 worldPos = pos + chunkOffset - center;
+    float baseSphere = radius - length(worldPos);
+    
+    if (terrain == 0)
+    {
+        AddElevation(0);
+        return baseSphere;
+    }
+    
+    float elevation;
+    if (terrain < 0) elevation = baseSphere;
+    else elevation = baseSphere + terrain;
+    
+    AddElevation(elevation - baseSphere);
+    return elevation;
+}
+
+[numthreads(8,8,8)]
+void SphereIsosurface (uint3 id : SV_DispatchThreadID)
+{
+    // We run untill id is exactly equal to resolution
+    // Because there are (resolution + 1) points on each axes
+    if (id.x >= resolution || id.y >= resolution || id.z >= resolution) return;
+    
+    float3 pos = id.xyz * spacing;
+    
+    float terrain = noise[Index(id.xyz, resolution)];
+    float elevation = SphereField(pos, terrain);
+    float4 p = float4(pos, elevation);
+    
+    points[Index(id.xyz, resolution)] = p;
+}

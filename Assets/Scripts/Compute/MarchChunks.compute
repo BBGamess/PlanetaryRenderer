@@ -1,0 +1,70 @@
+#pragma kernel MarchChunk
+#pragma target 5.0
+
+#include "Includes/MarchingTables.hlsl"
+#include "Includes/ComputeUtils.hlsl"
+
+struct Triangle
+{
+    float3 a;
+    float3 b;
+    float3 c;
+};
+
+AppendStructuredBuffer<Triangle> triangleBuffer;
+RWStructuredBuffer<float4> points;
+RWStructuredBuffer<float3> chunkOffset;
+
+int resolution;
+float isovalue;
+
+[numthreads(8,8,8)]
+void MarchChunk (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= resolution - 1 || id.y >= resolution - 1 || id.z >= resolution - 1) return;
+    
+    float4 cornerPoints[8];
+    
+    for (int i = 0; i < 8; i++)
+    {
+        float3 indexPos = id.xyz + cornerOffsets[i];
+        cornerPoints[i] = points[Index(indexPos.xyz, resolution)];
+    }
+    
+    int config = 0;
+    [unroll]
+    for (i = 0; i < 8; i++)
+    {
+        if (cornerPoints[i].w < isovalue)
+            config |= (1 << i);
+    }
+    
+    if (config == 0 || config == 255) return;
+    
+    int triBase = config * 16;
+    for (i = 0; triangles[triBase + i] != -1; i += 3)
+    {
+        Triangle tri;
+        
+        int configA = triangles[triBase + i];
+        float4 startA = cornerPoints[edges[configA][0]];
+        float4 endA = cornerPoints[edges[configA][1]];
+        float3 vertexA = VertexLerp(startA.xyz, endA.xyz, startA.w, endA.w);
+        
+        int configB = triangles[triBase + i + 1];
+        float4 startB = cornerPoints[edges[configB][0]];
+        float4 endB = cornerPoints[edges[configB][1]];
+        float3 vertexB = VertexLerp(startB.xyz, endB.xyz, startB.w, endB.w);
+        
+        int configC = triangles[triBase + i + 2];
+        float4 startC = cornerPoints[edges[configC][0]];
+        float4 endC = cornerPoints[edges[configC][1]];
+        float3 vertexC = VertexLerp(startC.xyz, endC.xyz, startC.w, endC.w);
+        
+        tri.a = vertexA;
+        tri.b = vertexB;
+        tri.c = vertexC;
+        
+        triangleBuffer.Append(tri);
+    }
+}

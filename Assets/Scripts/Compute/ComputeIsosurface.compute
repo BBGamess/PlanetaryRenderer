@@ -1,0 +1,23 @@
+#pragma kernel Isosurface
+#pragma target 5.0
+
+#include "Includes/ComputeUtils.hlsl"
+
+RWStructuredBuffer<float4> points;
+StructuredBuffer<float3> offset;
+float radius;
+int resolution;
+
+[numthreads(8,8,8)]
+void Isosurface (uint3 id : SV_DispatchThreadID)
+{
+    /*if (id.x > resolution || id.y > resolution || id.z > resolution){
+        return;
+    }
+    
+    float3 pos = id.xyz + offset[0];
+    float value = SphereIsosurface(pos, offset[0], radius);
+    
+    int index = id.x + id.y * resolution + id.z * resolution * resolution;
+    points[index] = float4(pos, value);*/
+}

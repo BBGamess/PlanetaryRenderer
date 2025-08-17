@@ -1,0 +1,97 @@
+#pragma kernel March
+#pragma target 5.0
+
+#include "Includes/MarchingTables.hlsl"
+
+struct Triangle
+{
+    float3 a;
+    float3 b;
+    float3 c;
+};
+
+AppendStructuredBuffer<Triangle> triangleBuffer;
+RWStructuredBuffer<float3> off;
+float radius;
+int resolution;
+
+float SphereField(float3 position, float3 offset, float radius);
+float3 VertexLerp(float3 p1, float3 p2, float v1, float v2);
+
+[numthreads(8,8,8)]
+void March (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= resolution - 1 || id.y >= resolution - 1 || id.z >= resolution - 1) return;
+    
+    float3 worldPos = float3(id.x, id.y, id.z);
+    
+    float values[8];
+    float3 corners[8];
+    
+    for (int i = 0; i < 8; i++)
+    {
+        int3 offset = cornerOffsets[i];
+        corners[i] = worldPos + offset;
+        values[i] = SphereField(corners[i], off[0], radius);
+    }
+
+    // Compute the config index represented as an 8bit integer where each bit represents if the corner is inside or outside the isosurface
+    // like 0b01101011
+    int config = 0;
+    [unroll]
+    for (i = 0; i < 8; i++)
+        if (values[i] < 0)
+            config |= (1 << i);
+
+    // Exit early if the cube is completely inside or outside the isosurface (no edges intersect the isosurface)
+    if (config == 0 || config == 255) return;
+    
+    int triBase = config * 16;
+    for (i = 0; triangles[triBase + i] != -1; i += 3)
+    {
+        Triangle tri;
+        
+        int configA = triangles[triBase + i];
+        float3 startA = corners[edges[configA][0]];
+        float3 endA = corners[edges[configA][1]];
+            
+        float v1a = values[edges[configA][0]];
+        float v2a = values[edges[configA][1]];
+        float3 vertexA = VertexLerp(startA, endA, v1a, v2a);
+        
+        int configB = triangles[triBase + i + 1];
+        float3 startB = corners[edges[configB][0]];
+        float3 endB = corners[edges[configB][1]];
+            
+        float v1b = values[edges[configB][0]];
+        float v2b = values[edges[configB][1]];
+        float3 vertexB = VertexLerp(startB, endB, v1b, v2b);
+        
+        int configC = triangles[triBase + i + 2];
+        float3 startC = corners[edges[configC][0]];
+        float3 endC = corners[edges[configC][1]];
+            
+        float v1c = values[edges[configC][0]];
+        float v2c = values[edges[configC][1]];
+        float3 vertexC = VertexLerp(startC, endC, v1c, v2c);
+        
+        tri.a = vertexA;
+        tri.b = vertexB;
+        tri.c = vertexC;
+        
+        triangleBuffer.Append(tri);
+    }
+}
+
+float SphereField(float3 position, float3 offset, float radius)
+{
+    float3 worldPos = position + offset;
+
+    return (radius * radius) - (worldPos.x * worldPos.x + worldPos.y * worldPos.y + worldPos.z * worldPos.z);
+}
+
+float3 VertexLerp(float3 p1, float3 p2, float v1, float v2)
+{
+    float t = (0.0 - v1) / (v2 - v1 + 1e-6);
+    return lerp(p1, p2, t);
+}
