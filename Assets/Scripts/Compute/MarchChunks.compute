@@ -13,7 +13,6 @@ struct Triangle
 
 AppendStructuredBuffer<Triangle> triangleBuffer;
 RWStructuredBuffer<float4> points;
-RWStructuredBuffer<float3> chunkOffset;
 
 int resolution;
 float isovalue;

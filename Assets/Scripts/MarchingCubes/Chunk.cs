@@ -6,7 +6,7 @@ public class Chunk : MonoBehaviour
 {
     private MeshFilter m_MeshFilter;
     private MeshRenderer m_Renderer;
-    private Mesh m_Mesh;
+    public Mesh m_Mesh;
     private Material m_Material;
 
     private Vector2 m_MinMax;

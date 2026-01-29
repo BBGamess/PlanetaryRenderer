@@ -258,7 +258,6 @@ public class PlanetRenderer : MonoBehaviour
         }
 
         minMaxVec = new Vector2(min, max);
-        Debug.Log(minMaxVec);
         mat.SetFloat("_min", min);
         mat.SetFloat("_max", max);
         mat.SetFloat("_radius", m_Radius);
@@ -319,6 +318,13 @@ public class PlanetRenderer : MonoBehaviour
             }
         }
 
+        int tris = 0;
+        foreach (Chunk chunk in m_Chunks)
+        {
+            tris += chunk.m_Mesh.triangles.Length;
+        }
+
+        Debug.Log($"Number of triangles: {tris}");
         ReleaseBuffers();
     }
 
