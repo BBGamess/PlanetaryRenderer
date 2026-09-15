@@ -1,0 +1,64 @@
+#pragma kernel SVOBuilder
+
+#include "Includes/SVOShared.hlsl"
+
+AppendStructuredBuffer<SVONode> nextLevel;
+AppendStructuredBuffer<SVONode> leafNodes;
+StructuredBuffer<SVONode> currentLevel;
+
+float radius;
+int maxDepth;
+
+float SampleDensity(float3 p)
+{
+    return length(p) - radius;
+}
+
+bool NodeIntersectsSurface(float3 minCorner, float size)
+{
+    float3 c = minCorner + (size * 0.5).xxx;
+    float dc = SampleDensity(c);
+
+    float halfDiag = 0.8660254038 * size;
+
+    return abs(dc) <= halfDiag;
+}
+
+[numthreads(64, 1, 1)]
+void SVOBuilder(uint id : SV_DispatchThreadID)
+{
+    uint count, stride;
+    currentLevel.GetDimensions(count, stride);
+    if (id >= count)
+        return;
+
+    SVONode node = currentLevel[id];
+
+    if (!NodeIntersectsSurface(node.minCorner, node.size))
+        return;
+
+    // Leaf
+    if (node.level == (uint) maxDepth)
+    {
+        leafNodes.Append(node);
+        return;
+    }
+
+    // Subdivide
+    float childSize = node.size * 0.5;
+
+    [unroll]
+    for (int c = 0; c < 8; c++)
+    {
+        SVONode child = (SVONode) 0;
+        child.level = node.level + 1;
+        child.size = childSize;
+        child.minCorner = node.minCorner + cornerOffsets[c] * childSize;
+
+        // extra cull for performance
+        if (!NodeIntersectsSurface(child.minCorner, child.size))
+            continue;
+
+        nextLevel.Append(child);
+    }
+}

@@ -1,0 +1,108 @@
+#pragma kernel SVOBuilder
+
+#include "Includes/SVOShared.hlsl"
+
+AppendStructuredBuffer<SVONode> nextLevel;
+AppendStructuredBuffer<SVONode> leafNodes;
+StructuredBuffer<SVONode> currentLevel;
+//StructuredBuffer<NoiseLayer> noiseLayers; In SVOShared.hlsl
+
+float radius;
+float maxNoiseDisp;
+int maxDepth;
+int nodeCount;
+//int numLayers; In SVOShared.hlsl
+
+bool Straddle(float3 minCorner, float size)
+{
+    const float eps = max(1e-3, size * 0.05f);
+
+    bool anyNeg = false, anyPos = false;
+
+    float3 c = minCorner + (size * 0.5).xxx;
+    float dC = SampleDensity(c, radius);
+    if (dC < -eps)
+        anyNeg = true;
+    else if (dC > eps)
+        anyPos = true;
+    else
+    {
+        anyNeg = true;
+        anyPos = true;
+    }
+
+    [unroll]
+    for (int i = 0; i < 8; i++)
+    {
+        float3 p = minCorner + cornerOffsetsFloat[i] * size;
+        float d = SampleDensity(p, radius);
+
+        if (d < -eps)
+            anyNeg = true;
+        else if (d > eps)
+            anyPos = true;
+        else
+        {
+            anyNeg = true;
+            anyPos = true;
+        }
+    }
+    return anyNeg && anyPos;
+}
+
+bool MightIntersectCheap(float3 minCorner, float size)
+{
+    float3 c = minCorner + (size * 0.5).xxx;
+    float dSphere = SampleSphereDensity(c, radius);
+    float halfDiag = 0.8660254038 * size;
+    return abs(dSphere) <= halfDiag + maxNoiseDisp;
+}
+
+bool NodeIntersectsSurface(float3 minCorner, float size, uint level)
+{
+    if (!MightIntersectCheap(minCorner, size))
+        return false;
+
+    if (level < maxDepth - 2)
+        return true;
+
+    return Straddle(minCorner, size);
+}
+
+[numthreads(64,1,1)]
+void SVOBuilder (uint id : SV_DispatchThreadID)
+{
+    if (id >= (uint)  nodeCount)
+        return;
+    
+    SVONode node = currentLevel[id];
+    
+    bool intersects = NodeIntersectsSurface(node.minCorner, node.size, node.level);
+    
+    if (!intersects)
+        return;
+    
+    if (node.level == (uint) maxDepth)
+    {
+        leafNodes.Append(node);
+        return;
+    }
+    
+    float childSize = node.size * 0.5;
+
+    [unroll]
+    for (int c = 0; c < 8; c++)
+    {
+        SVONode child = (SVONode) 0;
+        child.level = node.level + 1;
+        child.size = childSize;
+        child.minCorner = node.minCorner + cornerOffsetsFloat[c] * childSize;
+
+        // extra cull for performance
+        if (!MightIntersectCheap(child.minCorner, child.size))
+            continue;
+        
+
+        nextLevel.Append(child);
+    }
+}

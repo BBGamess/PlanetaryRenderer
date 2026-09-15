@@ -1,0 +1,28 @@
+#pragma kernel AppendLeafNodesToVoxelInstances
+
+#include "Includes/SVOShared.hlsl"
+
+struct Voxel
+{
+    float3 center;
+    float size;
+};
+
+StructuredBuffer<SVONode> leafNodes;
+AppendStructuredBuffer<Voxel> voxelBuffer;
+
+int leafCount;
+
+[numthreads(64,1,1)]
+void AppendLeafNodesToVoxelInstances(uint id : SV_DispatchThreadID)
+{
+    if (id >= (uint) leafCount)
+        return;
+    
+    SVONode node = leafNodes[id];
+    Voxel v;
+    v.center = node.minCorner + (node.size * 0.5).xxx;
+    v.size = node.size;
+    
+    voxelBuffer.Append(v);
+}

@@ -13,7 +13,6 @@ struct Triangle
 
 AppendStructuredBuffer<Triangle> triangleBuffer;
 RWStructuredBuffer<float4> points;
-RWStructuredBuffer<float3> chunkOffset;
 
 int resolution;
 float isovalue;
@@ -27,7 +26,7 @@ void MarchChunk (uint3 id : SV_DispatchThreadID)
     
     for (int i = 0; i < 8; i++)
     {
-        float3 indexPos = id.xyz + cornerOffsets[i];
+        float3 indexPos = id.xyz + cornerOffsetsInt[i];
         cornerPoints[i] = points[Index(indexPos.xyz, resolution)];
     }
     

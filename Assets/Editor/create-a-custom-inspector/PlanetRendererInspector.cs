@@ -21,8 +21,8 @@ public class PlanetRendererInspector : Editor
         bool generateMeshAsync = GUILayout.Button("Generate Mesh Asynchronously");
         bool updateColors = GUILayout.Button("Update Colors");
 
-        if (generateMesh) pr.RenderPlanet();
-        if (generateMeshAsync) pr.RenderPlanetAsync();
+        if (generateMesh) pr.RenderPlanetSequential();
+        //if (generateMeshAsync) pr.RenderPlanetAsync();
         if (updateColors) pr.UpdatePlanetColors();
 
         DrawScriptableEditor(pr.planetColors, pr.UpdatePlanetColors, ref colorEditor);

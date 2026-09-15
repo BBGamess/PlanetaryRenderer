@@ -1,0 +1,31 @@
+#pragma kernel GenerateDenseGrid
+
+struct Voxel
+{
+    float3 center;
+    float size;
+};
+
+RWStructuredBuffer<Voxel> voxelBuffer;
+
+int voxelsX;
+int voxelsY;
+int voxelsZ;
+float voxelSize;
+float3 gridMinCorner;
+
+[numthreads(8,8,8)]
+void GenerateDenseGrid (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint) voxelsX || id.y >= (uint) voxelsY || id.z >= (uint) voxelsZ)
+        return;
+
+    uint index = id.x + id.y * voxelsX + id.z * voxelsX * voxelsY;
+    
+    float3 minCorner = gridMinCorner + float3(id) * voxelSize;
+    
+    Voxel v;
+    v.center = minCorner + (voxelSize * 0.5).xxx;
+    v.size = voxelSize;
+    voxelBuffer[index] = v;
+}
