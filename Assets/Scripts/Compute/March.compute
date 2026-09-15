@@ -30,7 +30,7 @@ void March (uint3 id : SV_DispatchThreadID)
     
     for (int i = 0; i < 8; i++)
     {
-        int3 offset = cornerOffsets[i];
+        int3 offset = cornerOffsetsInt[i];
         corners[i] = worldPos + offset;
         values[i] = SphereField(corners[i], off[0], radius);
     }

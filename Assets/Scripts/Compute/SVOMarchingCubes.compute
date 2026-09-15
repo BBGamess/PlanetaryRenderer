@@ -1,0 +1,79 @@
+#pragma kernel SVOMarchingCubes
+
+#include "Includes/SVOShared.hlsl"
+#include "Includes/MarchingTables.hlsl"
+#include "Includes/ComputeUtils.hlsl"
+
+struct Triangle
+{
+    float3 a;
+    float3 b;
+    float3 c;
+};
+
+AppendStructuredBuffer<Triangle> triangleBuffer;
+StructuredBuffer<SVONode> leafNodes;
+
+float3 chunkMinCorner;
+float radius;
+int leafCount;
+
+[numthreads(64,1,1)]
+void SVOMarchingCubes (uint id : SV_DispatchThreadID)
+{
+    if (id >= leafCount)
+        return;
+    
+    SVONode node = leafNodes[id];
+    
+    float4 cornerPoints[8];
+    
+    [unroll]
+    for (int i = 0; i < 8; i++)
+    {
+        float3 pos = node.minCorner + cornerOffsetsInt[i] * node.size;
+        cornerPoints[i] = float4(pos, SampleDensity(pos, radius));
+    }
+    
+    float iso = 0.0f;
+    float eps = 1e-4 * node.size; // node.size is practically 1 for every leaf but it can change in the future
+    
+    int config = 0;
+    [unroll]
+    for (int c = 0; c < 8; c++)
+    {
+        if (cornerPoints[c].w < iso - eps)
+            config |= (1 << c);
+    }
+    
+    if (config == 0 || config == 255)
+        return;
+    
+    int triBase = config * 16;
+    for (int t = 0; triangles[triBase + t] != -1; t += 3)
+    {
+        Triangle tri;
+
+        int eA = triangles[triBase + t];
+        int eB = triangles[triBase + t + 1];
+        int eC = triangles[triBase + t + 2];
+
+        float4 sA = cornerPoints[edges[eA][0]];
+        float4 eA2 = cornerPoints[edges[eA][1]];
+        float3 vA = VertexLerp(sA.xyz, eA2.xyz, sA.w, eA2.w);
+
+        float4 sB = cornerPoints[edges[eB][0]];
+        float4 eB2 = cornerPoints[edges[eB][1]];
+        float3 vB = VertexLerp(sB.xyz, eB2.xyz, sB.w, eB2.w);
+
+        float4 sC = cornerPoints[edges[eC][0]];
+        float4 eC2 = cornerPoints[edges[eC][1]];
+        float3 vC = VertexLerp(sC.xyz, eC2.xyz, sC.w, eC2.w);
+
+        tri.a = vA - chunkMinCorner;
+        tri.b = vC - chunkMinCorner;
+        tri.c = vB - chunkMinCorner;
+
+        triangleBuffer.Append(tri);
+    }
+}

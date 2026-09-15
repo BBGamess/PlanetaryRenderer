@@ -7,20 +7,12 @@ struct Point
 // Linear interpolation of vertices
 float3 VertexLerp(float3 p1, float3 p2, float v1, float v2)
 {
-    float denom = (v2 - v1);
-    if (abs(denom) < 1e-8)
-        return (p1 + p2) * 0.5;
-    float t = (0 - v1) / denom;
-    return lerp(p1, p2, saturate(t));
+    float t = (0.0 - v1) / (v2 - v1 + 1e-6);
+    return lerp(p1, p2, t);
 }
 
 int Index(float3 id, int resolution)
 {
     int pointResolution = resolution + 1;
     return (int) id.x + pointResolution * ((int) id.y + pointResolution * (int) id.z);
-}
-
-float3 TetEdgeVertex(float4 p0, float4 p1)
-{
-    return VertexLerp(p0.xyz, p1.xyz, p0.w, p1.w);
 }
